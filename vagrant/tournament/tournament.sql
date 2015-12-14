@@ -21,8 +21,6 @@ CREATE TABLE players (
 );
 CREATE TABLE matches (
 	matchID SERIAL,
-	winner varchar(255),
-	loser varchar(255),
 	winnerid int,
 	loserid int
 );

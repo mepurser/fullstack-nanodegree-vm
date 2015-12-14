@@ -5,7 +5,6 @@
 
 import psycopg2
 
-
 def connect():
     """Connect to the PostgreSQL database.  Returns a database connection."""
     return psycopg2.connect("dbname=tournament")
@@ -118,19 +117,17 @@ def reportMatch(winner, loser):
     qryPlayerDetail = 'SELECT playername FROM players WHERE (playerid=' + str(winner) + ')'
     c.execute(qryPlayerDetail + ';')
     row = c.fetchall()
-    winnername = "'" + row[0][0].replace("'", "''") + "'"
 
     # lookup the name of the loser from the players table
     qryPlayerDetail = 'SELECT playername FROM players WHERE (playerid=' + str(loser) + ')'
     c.execute(qryPlayerDetail + ';')
     row = c.fetchall()
-    losername = "'" + row[0][0].replace("'", "''") + "'"
 
     # create a string of the winner name, loser, winner id, and loser id for entry into matches table
-    matchString = winnername + ', ' + losername + ', ' + str(winner) + ', ' + str(loser)
+    matchString = str(winner) + ', ' + str(loser)
 
     # insert line into matches table
-    qryMatchEntry = 'INSERT INTO matches (winner, loser, winnerid, loserid) VALUES (' + matchString + ');'
+    qryMatchEntry = 'INSERT INTO matches (winnerid, loserid) VALUES (' + matchString + ');'
     c.execute(qryMatchEntry)
     conn.commit()
     conn.close()
