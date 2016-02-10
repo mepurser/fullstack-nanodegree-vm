@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+    <head>
+      <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+      <script src="//apis.google.com/js/platform.js?onload=start"> </script>
+      <link rel='stylesheet' href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css">
+      <link rel='stylesheet' type='text/css' href="{{ url_for('static', filename='styles.css') }}">
+      <meta charset="utf-8">
+      <title>Rooftop PV Equipment Project</title>
+
+      <meta name="viewport" content="width=device-width height=device-height">
+    </head>
+
+    <body>
+
+        <div class="container">
+            <div class='row'>
+
+              <div class='col-sm-6'>
+                <h1>PV Equipment App</h1>
+              </div>
+              <div class='col-sm-6 text-right'>
+                {% if not userIsLoggedIn %}
+                  <h4><a href='/login'>Login</a></h4>
+                {% endif %}
+                {% if userIsLoggedIn %}
+                  <h4><a href="/gdisconnect">Logout</a></h4>
+                {% endif %}
+              </div>
+            
+            </div>
+
+            <br>
+
+            <div class='row'>
+
+                <div class='col-sm-6'>
+                  <h2>Equipment</h2>
+                  <p>Select to see brands:</p>
+                  <ul>
+                    {% for i in categories %}
+                      <li>
+                        <a href="{{url_for('showBrands',category_id = i.id)}}">
+                        <b>{{i.name}}</b>
+                        </a>
+                        {% if userIsLoggedIn %}
+                          <a href="{{url_for('editCategory',category_id = i.id)}}">
+                          (edit)
+                          </a>
+                          <a href="{{url_for('delConfCategory',category_id = i.id)}}">
+                          (delete)
+                          </a>
+                        {% endif %}
+                      </li>
+                    {% endfor %}
+                    <li>
+                      {% if userIsLoggedIn %}
+                        <a href='{{url_for('newCategory')}}'>
+                          (Add category)
+                        </a>
+                      {% endif %}
+                    </li>
+                  </ul>
+                  <br>
+                </div>
+
+ 
+                <div class='col-sm-6'>
+                  {% if brands %}
+                    <h2>Brands</h2>
+                    <p>Select for description:</p>
+                    <ul>
+                      {% for i in brands %}
+                        <li>
+                          <a href="{{url_for('showDetail',category_id = i.category_id, brand_id = i.id)}}">
+                          <b>{{i.name}}</b>
+                          </a>
+                          {% if userIsLoggedIn %}
+                            <a href="{{url_for('editBrand',category_id = i.category_id, brand_id = i.id)}}">
+                            (edit)
+                            </a>
+                            <a href="{{url_for('delConfBrand',category_id = i.category_id, brand_id = i.id)}}">
+                            (delete)
+                            </a>
+                          {% endif %}
+                        </li>
+                      {% endfor %}
+                      <li>
+                        <a href='{{url_for('newBrand', category_id=curCategory.id)}}'>
+                          (Add brand)
+                        </a>
+                      </li>
+                    </ul>
+                  {% endif %}
+                </div>
+
+            </div>
+
+            <div class='row'>
+
+              <div class='col-sm-12'>
+                <hr>
+                {% if curBrand %}
+
+                  <h2>{{curBrand.name}} ({{curCategory.name}})</h2>
+                  {{curBrand.description}}
+                {% endif %}
+                <hr>
+              </div>
+
+            </div>
+
+        </div>
+    </body>
+</html>
