@@ -29,10 +29,22 @@
             <div class='row'>
 
               <div class='col-sm-12'>
-                <form action='{{ url_for('editBrand',category_id = curCategory.id, brand_id = curBrand.id) }}' method="POST">
-                  Edit brand:<br>
-                  <input type='text' name='name' placeholder={{curBrand.name}}><br>
-                  <input type="submit" value="Submit">
+                <form action='{{ url_for('editCategory',category_id = curCategory.id) }}' method="POST" class="form-horizontal">
+                  
+                  <div class="form-group">
+                    <label for="inputCatName" class="col-sm-2 control-label">Category</label>
+                    <div class="col-sm-3">
+                      <input type='text' class='form-control' name='name' id='inputCatName' placeholder={{curCategory.name}}>
+                    </div>
+                    <div class="col-sm-7">
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <div class="col-sm-offset-2 col-sm-10">
+                      <button type="submit" class="btn btn-default">Submit</button>
+                    </div>
+                  </div>
+
                 </form>
               </div>
 

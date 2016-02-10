@@ -1,6 +1,7 @@
 import os, random, string, json, requests, httplib2
 
 from flask import Flask, render_template, request, make_response, redirect, jsonify, url_for, flash
+
 #'session' is already used as db session, so renaming
 # authentication session to 'login_session'
 from flask import session as login_session
@@ -10,7 +11,7 @@ from oauth2client.client import FlowExchangeError
 from sqlalchemy import create_engine, asc
 from sqlalchemy.orm import scoped_session, sessionmaker
 
-from database_setup import Base, EquipCategory, EquipBrand
+from database_setup import Base, EquipCategory, EquipBrand, User
 
 app = Flask(__name__)
 
@@ -106,6 +107,13 @@ def gconnect():
     login_session['picture'] = data['picture']
     login_session['email'] = data['email']
 
+    # see if user exists, if not, make a new one
+    user_id = getUserID(login_session['email'])
+    if not user_id:
+        user_id = createUser(login_session)
+    login_session['user_id'] = user_id
+
+
     output = ''
     output += '<h1>Welcome, '
     output += login_session['username']
@@ -113,10 +121,32 @@ def gconnect():
     output += '<img src="'
     output += login_session['picture']
     output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
-    flash("you are now logged in as %s" % login_session['username'])
     print "done!"
     return output
 
+# User Helper Functions
+
+
+def createUser(login_session):
+    newUser = User(name=login_session['username'], email=login_session[
+                   'email'], picture=login_session['picture'])
+    session.add(newUser)
+    session.commit()
+    user = session.query(User).filter_by(email=login_session['email']).one()
+    return user.id
+
+
+def getUserInfo(user_id):
+    user = session.query(User).filter_by(id=user_id).one()
+    return user
+
+
+def getUserID(email):
+    try:
+        user = session.query(User).filter_by(email=email).one()
+        return user.id
+    except:
+        return None
 
 # DISCONNECT - Revoke a current user's token and reset their login_session
 
@@ -150,6 +180,196 @@ def gdisconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
 
+
+# add new category page
+@app.route('/index/new/', methods=['GET','POST'])
+def newCategory():
+    if 'username' not in login_session:
+        return redirect('/login')
+    if request.method == 'POST':
+        newCategory = EquipCategory(
+            name=request.form['name'], 
+            user_id=login_session['user_id'])
+        session.add(newCategory)
+        session.commit()
+        brands = session.query(EquipBrand).all()
+        categories = session.query(EquipCategory).all()
+        return render_template('new_category.html', 
+            categories=categories, 
+            brands=brands)
+    else:
+        brands = session.query(EquipBrand).all()
+        categories = session.query(EquipCategory).all()
+        return render_template('new_category.html', 
+            categories=categories, 
+            brands=brands)
+
+# add new brand page
+@app.route('/index/new/<int:category_id>', methods=['GET','POST'])
+def newBrand(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    if request.method == 'POST':
+        newBrand = EquipBrand(
+            name=request.form['name'],
+            description=request.form['description'],
+            category_id=category_id,
+            user_id=login_session['user_id'])
+        session.add(newBrand)
+        session.commit()
+        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        return render_template('new_brand.html', curCategory=curCategory, brands=brands)
+    else:
+        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        return render_template('new_brand.html', 
+            curCategory=curCategory, 
+            brands=brands)
+
+# collect edits for existing brand
+@app.route('/index/edit/inputs/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
+def inputEditsBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
+        if curBrand.user_id == curUser.id:
+            return render_template('edit_brand.html', 
+                curCategory=curCategory, 
+                curBrand=curBrand)
+        else:
+            return render_template('unauthorized.html')
+
+# collect edits for existing brand
+@app.route('/index/edit/inputs/<int:category_id>', methods=['GET','POST'])
+def inputEditsCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        if curCategory.user_id == curUser.id:
+            return render_template('edit_category.html', 
+                curCategory=curCategory)
+        else:
+            return render_template('unauthorized.html')
+
+# edit existing brand
+@app.route('/index/edit/confirmed/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
+def editBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
+        if curBrand.user_id == curUser.id:
+            if request.method == 'POST':
+                editedItem = session.query(EquipBrand).filter_by(id=brand_id).one()
+                editedItem.name = request.form['name']
+                editedItem.description = request.form['description']
+                session.add(editedItem)
+                session.commit()
+                return redirect('/pv_equipment/' + str(category_id) + '/')
+            else:
+                return redirect('/index')
+        else:
+            return render_template('unauthorized.html')
+
+# edit existing category
+@app.route('/index/edit/confirmed/<int:category_id>', methods=['GET','POST'])
+def editCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        if curCategory.user_id == curUser.id:
+            if request.method == 'POST':
+                editedItem = session.query(EquipCategory).filter_by(id=category_id).one()
+                editedItem.name = request.form['name']
+                session.add(editedItem)
+                session.commit()
+                return redirect('/index')
+            else:
+                return redirect('/index')
+        else:
+            return render_template('unauthorized.html')
+
+# confirm deletion of existing category
+@app.route('/index/delete/<int:category_id>')
+def delConfCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        if curCategory.user_id == curUser.id:
+            return render_template('confirm_delete_category.html', 
+                curCategory=curCategory)
+        else:
+            return render_template('unauthorized.html')
+
+# confirm deletion of existing brand
+@app.route('/index/delete/<int:category_id>/<int:brand_id>')
+def delConfBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
+        if curBrand.user_id == curUser.id:
+            return render_template('confirm_delete_brand.html', 
+                curCategory=curCategory, 
+                curBrand=curBrand)
+        else:
+            return render_template('unauthorized.html')
+
+# delete existing brand
+@app.route('/index/delete/confirmed/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
+def delBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
+        if curBrand.user_id == curUser.id:
+            if request.method == 'POST':
+                itemToDelete = session.query(EquipBrand).filter_by(id=brand_id).one()
+                session.delete(itemToDelete)
+                session.commit()
+                return redirect('/pv_equipment/' + str(category_id) + '/')
+            else:
+                return redirect('/pv_equipment/' + str(category_id) + '/')
+        else:
+            return render_template('unauthorized.html')
+
+# delete existing category and all associated brands
+@app.route('/index/delete/confirmed/<int:category_id>', methods=['GET','POST'])
+def delCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curUser = session.query(User).filter_by(name=login_session['username']).one()
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        if curCategory.user_id == curUser.id:
+            if request.method == 'POST':
+                itemToDelete = session.query(EquipCategory).filter_by(id=category_id).one()
+                session.delete(itemToDelete)
+                brandsToDelete = session.query(EquipBrand).filter_by(category_id=category_id).all()
+                for i in brandsToDelete:
+                    session.delete(i)
+                session.commit()
+                return redirect('/index')
+            else:
+                return redirect('/index')
+        else:
+            return render_template('unauthorized.html')
+
 # once category is clicked, list brands in second panel
 @app.route('/pv_equipment/<int:category_id>/')
 def showBrands(category_id):
@@ -159,7 +379,20 @@ def showBrands(category_id):
     userIsLoggedIn = False
     if 'username' in login_session:
         userIsLoggedIn = True
-    return render_template('index.html', curCategory=curCategory, categories=categories, brands=brands, userIsLoggedIn=userIsLoggedIn)
+        user = session.query(User).filter_by(name=login_session['username']).one()
+        return render_template('index.html', 
+            curCategory=curCategory, 
+            categories=categories, 
+            brands=brands, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id=user.id)
+    else:
+        return render_template('index.html', 
+            curCategory=curCategory, 
+            categories=categories, 
+            brands=brands, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id='')
 
 # clicking on specific brands opens a page with a detailed description
 @app.route('/index/<int:category_id>/<int:brand_id>/')
@@ -171,146 +404,37 @@ def showDetail(category_id, brand_id):
     userIsLoggedIn = False
     if 'username' in login_session:
         userIsLoggedIn = True
-    return render_template('index.html', curCategory=curCategory, categories=categories, brands=brands, curBrand=curBrand, userIsLoggedIn=userIsLoggedIn)
-
-# add new category page
-@app.route('/index/new/', methods=['GET','POST'])
-def newCategory():
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        newCategory = EquipCategory(name=request.form['name'])
-        session.add(newCategory)
-        flash('New category successfully added!')
-        session.commit()
-        brands = session.query(EquipBrand).all()
-        categories = session.query(EquipCategory).all()
-        return render_template('new_category.html', categories=categories, brands=brands)
+        user = session.query(User).filter_by(name=login_session['username']).one()
+        return render_template('index.html', 
+            curCategory=curCategory, 
+            categories=categories, 
+            brands=brands, 
+            curBrand=curBrand, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id=user.id)
     else:
-        brands = session.query(EquipBrand).all()
-        categories = session.query(EquipCategory).all()
-        return render_template('new_category.html', categories=categories, brands=brands)
+        return render_template('index.html', 
+            curCategory=curCategory, 
+            categories=categories, 
+            brands=brands, 
+            curBrand=curBrand, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id='')
 
-# add new brand page
-@app.route('/index/new/<int:category_id>', methods=['GET','POST'])
-def newBrand(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        newBrand = EquipBrand(name=request.form['name'],category_id=category_id,description='')
-        session.add(newBrand)
-        flash('New brand successfully added!')
-        session.commit()
-        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('new_brand.html', curCategory=curCategory, brands=brands)
-    else:
-        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('new_brand.html', curCategory=curCategory, brands=brands)
-
-# collect edits for existing brand
-@app.route('/index/edit/inputs/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
-def inputEditsBrand(category_id, brand_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    else:
-        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
-        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
-        return render_template('edit_brand.html', curCategory=curCategory, curBrand=curBrand)
-
-# collect edits for existing brand
-@app.route('/index/edit/inputs/<int:category_id>', methods=['GET','POST'])
-def inputEditsCategory(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        editedBrand = ''
-        session.add(editedBrand)
-        session.commit()
-        return redirect(url_for('pv_equipment'))
-    else:
-        return redirect('/index')
-
-# edit existing brand
-@app.route('/index/edit/confirmed/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
-def editBrand(category_id, brand_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        editedItem = session.query(EquipBrand).filter_by(id=brand_id).one()
-        editedItem.name = request.form['name']
-        editedItem.description = ''
-        session.add(editedItem)
-        session.commit()
-        return redirect('/pv_equipment/' + str(category_id) + '/')
-    else:
-        return redirect('/index')
-
-# edit existing category
-@app.route('/index/edit/confirmed/<int:category_id>', methods=['GET','POST'])
-def editCategory(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        newCategory = ''
-        session.add(newCategory)
-        flash('New category successfully added!')
-        session.commit()
-        return redirect(url_for('pv_equipment'))
-    else:
-        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        category_name = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('new_brand.html', curCategory=category_name, brands=brands)
-
-# confirm deletion of existing category
-@app.route('/index/delete/<int:category_id>')
-def delConfCategory(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    else:
-        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('confirm_delete_category.html', curCategory=curCategory)
-
-# confirm deletion of existing brand
-@app.route('/index/delete/<int:category_id>/<int:brand_id>')
-def delConfBrand(category_id, brand_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    else:
-        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
-        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
-        return render_template('confirm_delete_brand.html', curCategory=curCategory, curBrand=curBrand)
-
-# delete existing brand
-@app.route('/index/delete/confirmed/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
-def delBrand(category_id, brand_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        itemToDelete = session.query(EquipBrand).filter_by(id=brand_id).one()
-        session.delete(itemToDelete)
-        session.commit()
-        return redirect('/pv_equipment/' + str(category_id) + '/')
-    else:
-        return redirect('/pv_equipment/' + str(category_id) + '/')
-
-# delete existing category and all associated brands
-@app.route('/index/delete/confirmed/<int:category_id>', methods=['GET','POST'])
-def delCategory(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        itemToDelete = session.query(EquipCategory).filter_by(id=category_id).one()
-        session.delete(itemToDelete)
-        brandsToDelete = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        for i in brandsToDelete:
-            session.delete(i)
-        session.commit()
-        return redirect('/index')
-    else:
-        return redirect('/index')
-
+# print simply json of category and brand relationships
+@app.route('/catalog.json')
+def jsonifyCatalog():
+    catalogDict = {}
+    categories = session.query(EquipCategory).all()
+    for i in categories:
+        brands = session.query(EquipBrand).filter_by(category_id=i.id).all()
+        brandDict = {}
+        for j in brands:
+            currBrandDict = {}
+            currBrandDict['Description'] = j.description
+            brandDict[j.name] = currBrandDict
+        catalogDict[i.name] = brandDict
+    return jsonify(catalogDict)
 
 # set up index page.
 # checks to see if db exists, and if so, whether empty.
@@ -323,7 +447,16 @@ def pvEquipment():
     userIsLoggedIn = False
     if 'username' in login_session:
         userIsLoggedIn = True
-    return render_template('index.html', categories=categories, userIsLoggedIn=userIsLoggedIn)
+        user = session.query(User).filter_by(name=login_session['username']).one()
+        return render_template('index.html', 
+            categories=categories, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id=user.id)
+    else:
+        return render_template('index.html', 
+            categories=categories, 
+            userIsLoggedIn=userIsLoggedIn, 
+            user_id='')
 
 if not(os.path.exists(databaseName)):
     database_initdata.py
