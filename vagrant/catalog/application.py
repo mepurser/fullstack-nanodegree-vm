@@ -209,6 +209,59 @@ def newBrand(category_id):
         curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
         return render_template('new_brand.html', curCategory=curCategory, brands=brands)
 
+# collect edits for existing brand
+@app.route('/index/edit/inputs/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
+def inputEditsBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    else:
+        curCategory = session.query(EquipCategory).filter_by(id=category_id).first()
+        curBrand = session.query(EquipBrand).filter_by(id=brand_id).first()
+        return render_template('edit_brand.html', curCategory=curCategory, curBrand=curBrand)
+
+# collect edits for existing brand
+@app.route('/index/edit/inputs/<int:category_id>', methods=['GET','POST'])
+def inputEditsCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    if request.method == 'POST':
+        editedBrand = ''
+        session.add(editedBrand)
+        session.commit()
+        return redirect(url_for('pv_equipment'))
+    else:
+        return redirect('/index')
+
+# edit existing brand
+@app.route('/index/edit/confirmed/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
+def editBrand(category_id, brand_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    if request.method == 'POST':
+        editedItem = session.query(EquipBrand).filter_by(id=brand_id).one()
+        editedItem.name = request.form['name']
+        editedItem.description = ''
+        session.add(editedItem)
+        session.commit()
+        return redirect('/pv_equipment/' + str(category_id) + '/')
+    else:
+        return redirect('/index')
+
+# edit existing category
+@app.route('/index/edit/confirmed/<int:category_id>', methods=['GET','POST'])
+def editCategory(category_id):
+    if 'username' not in login_session:
+        return redirect('/login')
+    if request.method == 'POST':
+        newCategory = ''
+        session.add(newCategory)
+        flash('New category successfully added!')
+        session.commit()
+        return redirect(url_for('pv_equipment'))
+    else:
+        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
+        category_name = session.query(EquipCategory).filter_by(id=category_id).first()
+        return render_template('new_brand.html', curCategory=category_name, brands=brands)
 
 # confirm deletion of existing category
 @app.route('/index/delete/<int:category_id>')
@@ -238,9 +291,9 @@ def delBrand(category_id, brand_id):
         itemToDelete = session.query(EquipBrand).filter_by(id=brand_id).one()
         session.delete(itemToDelete)
         session.commit()
-        return redirect('/index')
+        return redirect('/pv_equipment/' + str(category_id) + '/')
     else:
-        return redirect('/index')
+        return redirect('/pv_equipment/' + str(category_id) + '/')
 
 # delete existing category and all associated brands
 @app.route('/index/delete/confirmed/<int:category_id>', methods=['GET','POST'])
@@ -258,37 +311,6 @@ def delCategory(category_id):
     else:
         return redirect('/index')
 
-# edit existing brand
-@app.route('/index/edit/<int:category_id>/<int:brand_id>', methods=['GET','POST'])
-def editBrand(category_id, brand_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        newCategory = ''
-        session.add(newCategory)
-        flash('New category successfully added!')
-        session.commit()
-        return redirect(url_for('pv_equipment'))
-    else:
-        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        category_name = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('new_brand.html', curCategory=category_name, brands=brands)
-
-# edit existing category
-@app.route('/index/edit/<int:category_id>', methods=['GET','POST'])
-def editCategory(category_id):
-    if 'username' not in login_session:
-        return redirect('/login')
-    if request.method == 'POST':
-        newCategory = ''
-        session.add(newCategory)
-        flash('New category successfully added!')
-        session.commit()
-        return redirect(url_for('pv_equipment'))
-    else:
-        brands = session.query(EquipBrand).filter_by(category_id=category_id).all()
-        category_name = session.query(EquipCategory).filter_by(id=category_id).first()
-        return render_template('new_brand.html', curCategory=category_name, brands=brands)
 
 # set up index page.
 # checks to see if db exists, and if so, whether empty.

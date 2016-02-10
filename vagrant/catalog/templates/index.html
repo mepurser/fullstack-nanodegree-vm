@@ -44,7 +44,7 @@
                         <b>{{i.name}}</b>
                         </a>
                         {% if userIsLoggedIn %}
-                          <a href="{{url_for('editCategory',category_id = i.id)}}">
+                          <a href="{{url_for('inputEditsCategory',category_id = i.id)}}">
                           (edit)
                           </a>
                           <a href="{{url_for('delConfCategory',category_id = i.id)}}">
@@ -76,7 +76,7 @@
                           <b>{{i.name}}</b>
                           </a>
                           {% if userIsLoggedIn %}
-                            <a href="{{url_for('editBrand',category_id = i.category_id, brand_id = i.id)}}">
+                            <a href="{{url_for('inputEditsBrand',category_id = i.category_id, brand_id = i.id)}}">
                             (edit)
                             </a>
                             <a href="{{url_for('delConfBrand',category_id = i.category_id, brand_id = i.id)}}">
